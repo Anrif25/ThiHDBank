@@ -1,12 +1,12 @@
 import streamlit as st
 import requests
 import pandas as pd
-import time  # Thêm import time để điều khiển tốc độ làm mới
+import time
 
 def color_rows(row):
-    if (row['muc_do_hai_long'] >= 5 and row['cam_xuc'] in ['tích cực', 'trung tính']):
+    if (row['muc_do_hai_long'] >= 5 ):
         return ['background-color: lightgreen'] * len(row)
-    elif (row['muc_do_hai_long'] <= 4 and row['cam_xuc'] in ['tiêu cực', 'trung tính']):
+    elif (row['muc_do_hai_long'] <= 4 or row['cam_xuc'] in ['tiêu cực']):
         return ['background-color: lightyellow'] * len(row)
     return [''] * len(row)
 
@@ -35,17 +35,34 @@ def process_data(data):
 
     return df
 
-# Thiết lập giao diện Streamlit
-st.title("Quản lý thông tin khách hàng")
+def display_warnings(df):
+    """
+    Hiển thị cảnh báo cho các hàng có điều kiện thỏa mãn.
+    """
+    for index, row in df.iterrows():
+        if row['muc_do_hai_long'] <= 4 or row['cam_xuc'] == 'tiêu cực':
+            st.warning(f"Khách hàng ở đoạn chat {row['user_id']} cần nhân viên hỗ trợ.")
 
-# Thêm nút và slider để điều chỉnh tốc độ làm mới
+st.title("Quản lý thông tin mức độ hài lòng của khách hàng")
+
 auto_refresh = st.checkbox("Tự động làm mới", value=True)
-refresh_rate = st.slider("Tốc độ làm mới (giây)", min_value=1, max_value=60, value=5)
+refresh_rate = st.slider("Tốc độ làm mới (giây)", min_value=1, max_value=5, value=5)
+
+# Tạo hai cột với kích thước phù hợp
+col1, col2 = st.columns([1, 1])  # Cột bên trái rộng hơn
+
+
 
 # Nếu tự động làm mới được bật
 if auto_refresh:
-    # Sử dụng st.empty() để tạo placeholder
-    data_placeholder = st.empty()
+    # Sử dụng st.empty() cho mỗi cột
+    with col1:
+        st.header("Bảng Dữ Liệu Khách Hàng")
+        data_placeholder = st.empty()
+    
+    with col2:
+        st.header("Cảnh Báo")
+        warning_placeholder = st.empty()
     
     while True:
         # Lấy dữ liệu mới
@@ -53,11 +70,46 @@ if auto_refresh:
         processed_data = process_data(raw_data)
 
         if not processed_data.empty:
-            # Áp dụng style cho dataframe
-            styled_df = processed_data.style.apply(color_rows, axis=1)
-            data_placeholder.dataframe(styled_df)
+            # Hiển thị dữ liệu và cảnh báo
+            with col1:
+                # Cấu hình độ rộng cột
+                column_config = {
+                    "cam_xuc": st.column_config.TextColumn(
+                        "Cảm Xúc", 
+                        width="small"
+                    ),
+                    "muc_do_hai_long": st.column_config.NumberColumn(
+                        "Mức Độ Hài Lòng", 
+                        width="small"
+                    ),
+                    "user_id": st.column_config.TextColumn(
+                        "ID Đoạn chat", 
+                        width="medium"
+                    ),
+                    "ten_khach_hang": st.column_config.TextColumn(
+                        "Tên Khách hàng", 
+                        width="medium"
+                    )
+                }
+                
+                styled_df = processed_data.style.apply(color_rows, axis=1)
+                # Sử dụng use_container_width=True để hiển thị đầy đủ
+                data_placeholder.dataframe(
+                    styled_df, 
+                    column_config=column_config,
+                    use_container_width=True
+                )
+            
+            # Xóa các cảnh báo cũ và hiển thị cảnh báo mới
+            with col2:
+                warning_placeholder.empty()
+                with warning_placeholder.container():
+                    display_warnings(processed_data)
         else:
-            data_placeholder.write("Chưa có dữ liệu!")
+            with col1:
+                data_placeholder.write("Chưa có dữ liệu!")
+            with col2:
+                warning_placeholder.empty()
 
         # Chờ theo tốc độ làm mới
         time.sleep(refresh_rate)
@@ -67,12 +119,49 @@ if auto_refresh:
 
 else:
     # Nếu tắt tự động làm mới
+    with col1:
+        st.header("Bảng Dữ Liệu Khách Hàng")
+    
+    with col2:
+        st.header("Cảnh Báo")
+    
     raw_data = fetch_data()
     processed_data = process_data(raw_data)
 
     if not processed_data.empty:
-        # Áp dụng style cho dataframe
-        styled_df = processed_data.style.apply(color_rows, axis=1)
-        st.dataframe(styled_df)
+        # Hiển thị dữ liệu ở cột bên trái
+        with col1:
+            # Cấu hình độ rộng cột
+            column_config = {
+                "cam_xuc": st.column_config.TextColumn(
+                    "Cảm Xúc", 
+                    width="small"
+                ),
+                "muc_do_hai_long": st.column_config.NumberColumn(
+                    "Mức Độ Hài Lòng", 
+                    width="small"
+                ),
+                "user_id": st.column_config.TextColumn(
+                    "ID đoạn chat", 
+                    width="medium"
+                ),
+                "ten_khach_hang": st.column_config.TextColumn(
+                    "Tên Khách Hàng", 
+                    width="medium"
+                )
+            }
+            
+            styled_df = processed_data.style.apply(color_rows, axis=1)
+            # Sử dụng use_container_width=True để hiển thị đầy đủ
+            st.dataframe(
+                styled_df, 
+                column_config=column_config,
+                use_container_width=True
+            )
+        
+        # Hiển thị cảnh báo ở cột bên phải
+        with col2:
+            display_warnings(processed_data)
     else:
-        st.write("Chưa có dữ liệu!")
+        with col1:
+            st.write("Chưa có dữ liệu!")
