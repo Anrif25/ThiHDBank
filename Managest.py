@@ -2,6 +2,10 @@ import streamlit as st
 import requests
 import pandas as pd
 import time
+import plotly.express as px
+import plotly.graph_objects as go
+
+st.set_page_config(layout="wide")
 
 def color_rows(row):
     if (row['muc_do_hai_long'] >= 5 ):
@@ -35,27 +39,39 @@ def process_data(data):
 
     return df
 
-def display_warnings(df):
-    """
-    Hiển thị cảnh báo cho các hàng có điều kiện thỏa mãn.
-    """
+def display_warnings(df, processed_user_ids):
+    # Hiển thị cảnh báo cho những khách hàng chưa được xử lý
     for index, row in df.iterrows():
-        if row['muc_do_hai_long'] <= 4 or row['cam_xuc'] == 'tiêu cực':
-            st.warning(f"Khách hàng ở đoạn chat {row['user_id']} cần nhân viên hỗ trợ.")
+        if row['user_id'] not in processed_user_ids:
+            if row['muc_do_hai_long'] <= 4 or row['cam_xuc'] == 'tiêu cực':
+                st.warning(f"Khách hàng ở đoạn chat {row['user_id']} cần nhân viên hỗ trợ.")
+                processed_user_ids.add(row['user_id'])  # Đánh dấu user_id đã được cảnh báo
+
+def count_emotions(df):
+    emotion_counts = df['cam_xuc'].value_counts()
+    return emotion_counts
 
 st.title("Quản lý thông tin mức độ hài lòng của khách hàng")
 
-auto_refresh = st.checkbox("Tự động làm mới", value=True)
+# Tạo hai cột ngang nhau cho checkbox và nút "Lấy dữ liệu mới"
+col1, col2 = st.columns([1, 1])
+
+# Đặt checkbox trong cột 1
+with col1:
+    auto_refresh = st.checkbox("Tự động làm mới", value=True)
+
+# Nút "Lấy dữ liệu mới" chỉ hiển thị khi checkbox không được chọn
+if not auto_refresh:
+    with col2:
+        load_data_button = st.button("Lấy dữ liệu mới")
+
 refresh_rate = st.slider("Tốc độ làm mới (giây)", min_value=1, max_value=5, value=5)
 
-# Tạo hai cột với kích thước phù hợp
-col1, col2 = st.columns([1, 1])  # Cột bên trái rộng hơn
+# Tạo ba cột cho bảng dữ liệu, cảnh báo và biểu đồ cảm xúc
+col1, col2, col3 = st.columns([1, 1, 1])
 
-
-
-# Nếu tự động làm mới được bật
+# Sử dụng một biến trạng thái cho key để tạo key duy nhất khi tải lại dữ liệu
 if auto_refresh:
-    # Sử dụng st.empty() cho mỗi cột
     with col1:
         st.header("Bảng Dữ Liệu Khách Hàng")
         data_placeholder = st.empty()
@@ -64,104 +80,136 @@ if auto_refresh:
         st.header("Cảnh Báo")
         warning_placeholder = st.empty()
     
+    with col3:
+        st.header("Biểu Đồ Cảm Xúc")
+        chart_placeholder = st.empty()
+
+    processed_user_ids = set()  # Tạo một set để theo dõi các user_id đã được xử lý
+
     while True:
-        # Lấy dữ liệu mới
         raw_data = fetch_data()
         processed_data = process_data(raw_data)
 
         if not processed_data.empty:
-            # Hiển thị dữ liệu và cảnh báo
             with col1:
-                # Cấu hình độ rộng cột
+                # Cập nhật bảng dữ liệu khách hàng
                 column_config = {
-                    "cam_xuc": st.column_config.TextColumn(
-                        "Cảm Xúc", 
-                        width="small"
-                    ),
-                    "muc_do_hai_long": st.column_config.NumberColumn(
-                        "Mức Độ Hài Lòng", 
-                        width="small"
-                    ),
-                    "user_id": st.column_config.TextColumn(
-                        "ID Đoạn chat", 
-                        width="medium"
-                    ),
-                    "ten_khach_hang": st.column_config.TextColumn(
-                        "Tên Khách hàng", 
-                        width="medium"
-                    )
+                    "cam_xuc": st.column_config.TextColumn("Cảm Xúc", width="small"),
+                    "muc_do_hai_long": st.column_config.NumberColumn("Mức Độ Hài Lòng", width="small"),
+                    "user_id": st.column_config.TextColumn("ID Đoạn chat", width="medium"),
+                    "ten_khach_hang": st.column_config.TextColumn("Tên Khách hàng", width="medium")
                 }
-                
+
+                # Cập nhật bảng dữ liệu với thông tin mới
                 styled_df = processed_data.style.apply(color_rows, axis=1)
-                # Sử dụng use_container_width=True để hiển thị đầy đủ
                 data_placeholder.dataframe(
                     styled_df, 
                     column_config=column_config,
                     use_container_width=True
                 )
-            
-            # Xóa các cảnh báo cũ và hiển thị cảnh báo mới
+
             with col2:
+                # Cập nhật cảnh báo cho những khách hàng mới
                 warning_placeholder.empty()
-                with warning_placeholder.container():
-                    display_warnings(processed_data)
+                display_warnings(processed_data, processed_user_ids)
+            
+            with col3:
+                # Cập nhật biểu đồ cảm xúc với key duy nhất cho mỗi biểu đồ
+                emotion_counts = count_emotions(processed_data)
+                fig = px.bar(
+                    x=emotion_counts.index, 
+                    y=emotion_counts.values, 
+                    labels={'x': 'Cảm Xúc', 'y': 'Số Lượng'},
+                    title='Phân Bố Cảm Xúc Khách Hàng',
+                    color=emotion_counts.index,
+                    color_discrete_map={
+                        'tích cực': 'green', 
+                        'tiêu cực': 'red', 
+                        'trung tính': 'gray'
+                    }
+                )
+                fig.update_layout(
+                    xaxis_title='Cảm Xúc', 
+                    yaxis_title='Số Lượng Khách Hàng',
+                    height=300
+                )
+                chart_placeholder.plotly_chart(fig, use_container_width=True, key=str(fig))  # Thêm key duy nhất
+        
         else:
             with col1:
                 data_placeholder.write("Chưa có dữ liệu!")
             with col2:
                 warning_placeholder.empty()
+            with col3:
+                chart_placeholder.empty()
 
-        # Chờ theo tốc độ làm mới
         time.sleep(refresh_rate)
-        
-        # Làm mới trang
         st.rerun()
 
 else:
-    # Nếu tắt tự động làm mới
     with col1:
         st.header("Bảng Dữ Liệu Khách Hàng")
     
     with col2:
         st.header("Cảnh Báo")
     
+    with col3:
+        st.header("Biểu Đồ Cảm Xúc")
+    
     raw_data = fetch_data()
     processed_data = process_data(raw_data)
 
+    processed_user_ids = set()  # Tạo một set để theo dõi các user_id đã được xử lý
+
     if not processed_data.empty:
-        # Hiển thị dữ liệu ở cột bên trái
         with col1:
-            # Cấu hình độ rộng cột
+            # Cập nhật bảng dữ liệu khách hàng
             column_config = {
-                "cam_xuc": st.column_config.TextColumn(
-                    "Cảm Xúc", 
-                    width="small"
-                ),
-                "muc_do_hai_long": st.column_config.NumberColumn(
-                    "Mức Độ Hài Lòng", 
-                    width="small"
-                ),
-                "user_id": st.column_config.TextColumn(
-                    "ID đoạn chat", 
-                    width="medium"
-                ),
-                "ten_khach_hang": st.column_config.TextColumn(
-                    "Tên Khách Hàng", 
-                    width="medium"
-                )
+                "cam_xuc": st.column_config.TextColumn("Cảm Xúc", width="small"),
+                "muc_do_hai_long": st.column_config.NumberColumn("Mức Độ Hài Lòng", width="small"),
+                "user_id": st.column_config.TextColumn("ID đoạn chat", width="medium"),
+                "ten_khach_hang": st.column_config.TextColumn("Tên Khách Hàng", width="medium")
             }
-            
+
             styled_df = processed_data.style.apply(color_rows, axis=1)
-            # Sử dụng use_container_width=True để hiển thị đầy đủ
-            st.dataframe(
+            data_placeholder = st.empty()  # Placeholder cho bảng dữ liệu
+            data_placeholder.dataframe(
                 styled_df, 
                 column_config=column_config,
                 use_container_width=True
             )
         
-        # Hiển thị cảnh báo ở cột bên phải
         with col2:
-            display_warnings(processed_data)
+            # Cập nhật cảnh báo cho những khách hàng mới
+            display_warnings(processed_data, processed_user_ids)
+        
+        with col3:
+            # Cập nhật biểu đồ cảm xúc
+            emotion_counts = count_emotions(processed_data)
+            fig = px.bar(
+                x=emotion_counts.index, 
+                y=emotion_counts.values, 
+                labels={'x': 'Cảm Xúc', 'y': 'Số Lượng'},
+                title='Phân Bố Cảm Xúc Khách Hàng',
+                color=emotion_counts.index,
+                color_discrete_map={
+                    'tích cực': 'green', 
+                    'tiêu cực': 'red', 
+                    'trung tính': 'gray'
+                }
+            )
+            fig.update_layout(
+                xaxis_title='Cảm Xúc', 
+                yaxis_title='Số Lượng Khách Hàng',
+                height=300
+            )
+            st.plotly_chart(fig, use_container_width=True, key=str(fig))  # Thêm key duy nhất
+
     else:
         with col1:
             st.write("Chưa có dữ liệu!")
+
+    # Lấy dữ liệu mới khi nút "Lấy dữ liệu mới" được nhấn
+    if load_data_button:
+        raw_data = fetch_data()
+        processed_data = process_data(raw_data)
