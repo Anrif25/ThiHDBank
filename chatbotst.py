@@ -15,7 +15,7 @@ if "user_id" not in st.session_state:
 
 # Nếu chưa có tên hoặc chưa xác nhận, yêu cầu người dùng nhập và bấm nút xác nhận
 if not st.session_state.name_confirmed:
-    st.title("Chào mừng đến với Chatbot Gemini!")
+    st.title("Chào mừng đến với Chatbot EmoWatch!")
     user_name_input = st.text_input("Vui lòng nhập tên của bạn:")
 
     # Nút xác nhận
@@ -129,6 +129,6 @@ else:
         return EmotionScore, EmotionType
 
     # Nhận đầu vào từ người dùng
-    user_input = st.chat_input("Ask Gemini")
+    user_input = st.chat_input("Ask EmoWatch")
     if user_input:
         handle_user_input(user_input)
