@@ -15,6 +15,7 @@ class ChatData(BaseModel):
     muc_do_hai_long: int
     cam_xuc: str
 
+
 @app.post("/api/chat-data/")
 async def create_chat_data(chat_data_entry: ChatData):
     # Tìm và xóa bản ghi cũ với user_id trùng nhau
