@@ -15,7 +15,7 @@ if "user_id" not in st.session_state:
 
 # Nếu chưa có tên hoặc chưa xác nhận, yêu cầu người dùng nhập và bấm nút xác nhận
 if not st.session_state.name_confirmed:
-    st.title("Chào mừng đến với Chatbot Gemini!")
+    st.title("Chào mừng đến với Chatbot EmoWatch!")
     user_name_input = st.text_input("Vui lòng nhập tên của bạn:")
 
     # Nút xác nhận
@@ -109,26 +109,29 @@ else:
         feedback_prompt = (
             f'Đọc câu sau: "{prompt}". '
             "Đánh giá theo 2 tiêu chí: mức độ hài lòng trên thang điểm 1-10 và cảm xúc (tích cực/tiêu cực/trung tính). "
+            "Nếu câu trên là một trường hợp khẩn cấp có ảnh hưởng xấu thì hãy trả về điểm 1 và cảm xúc tiêu cực"
             "Trả lời ngắn gọn, chỉ cung cấp điểm số và cảm xúc."
         )
 
         # Tạo một đối tượng tạm thời không ảnh hưởng đến lịch sử chính
         temp_chat = model.start_chat(history=[])
         feedback_response = temp_chat.send_message(feedback_prompt)
+        
 
         # Tách dữ liệu từ phản hồi
         feedback_text = feedback_response.text
+        print(feedback_text)
         try:
             parts = feedback_text.split(", ")
             EmotionScore = int(parts[0])
             EmotionType = parts[1]
         except (IndexError, ValueError):
-            EmotionScore = 5
+            EmotionScore = 4
             EmotionType = "trung tính"
 
         return EmotionScore, EmotionType
 
     # Nhận đầu vào từ người dùng
-    user_input = st.chat_input("Ask Gemini")
+    user_input = st.chat_input("Ask EmoWatch")
     if user_input:
         handle_user_input(user_input)
